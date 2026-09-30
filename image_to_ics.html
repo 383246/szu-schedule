@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课表图片转 .ics 工具</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    color: #333;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 13px; }
+
+  .panel {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .panel h2 { font-size: 16px; margin-bottom: 12px; color: #333; }
+
+  .upload-area {
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fafafa;
+  }
+  .upload-area:hover { border-color: #667eea; background: #f0f4ff; }
+  .upload-area.dragover { border-color: #667eea; background: #e8eeff; }
+  .upload-icon { font-size: 48px; margin-bottom: 10px; }
+  .upload-text { color: #666; font-size: 14px; }
+  .upload-hint { color: #aaa; font-size: 12px; margin-top: 6px; }
+
+  .image-preview {
+    margin-top: 16px;
+    text-align: center;
+    max-height: 300px;
+    overflow: auto;
+  }
+  .image-preview img {
+    max-width: 100%;
+    border-radius: 6px;
+    border: 1px solid #eee;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+  }
+  .btn-secondary:hover { background: #e0e0e0; }
+  .btn-success { background: #52c41a; color: white; }
+  .btn-success:hover { background: #47a817; }
+  .btn-danger { background: #ff4d4f; color: white; }
+  .btn-danger:hover { background: #d9363e; }
+  .btn-small { padding: 4px 10px; font-size: 12px; }
+
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #eee;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 12px;
+    display: none;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .progress-text {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    margin-top: 6px;
+  }
+
+  .config-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .config-item {
+    flex: 1;
+    min-width: 150px;
+  }
+  .config-item label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  .config-item input, .config-item select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+
+  .course-list {
+    margin-top: 12px;
+  }
+  .course-item {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #eee;
+    align-items: flex-start;
+  }
+  .course-item input {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .course-item .ci-main { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .course-item .ci-name { width: 100%; font-weight: 600; font-size: 13px; }
+  .course-item .ci-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .course-item .ci-row input { flex: 1; min-width: 80px; }
+  .ci-delete {
+    background: #ff4d4f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .add-course-btn {
+    width: 100%;
+    padding: 10px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    background: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .add-course-btn:hover { border-color: #667eea; color: #667eea; background: #f8f9ff; }
+
+  .action-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  .steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    counter-reset: step;
+  }
+  .step {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    color: #aaa;
+    position: relative;
+  }
+  .step.active { color: #667eea; font-weight: 600; }
+  .step.done { color: #52c41a; }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    display: block;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    border-radius: 50%;
+    background: #eee;
+    color: #999;
+    margin: 0 auto 6px;
+    font-weight: bold;
+  }
+  .step.active::before { background: #667eea; color: white; }
+  .step.done::before { background: #52c41a; color: white; content: "✓"; }
+
+  .raw-ocr {
+    background: #f8f8f8;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    color: #666;
+    font-family: monospace;
+    margin-top: 10px;
+  }
+
+  .tip {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #614700;
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📸 课表图片转 .ics 工具</h1>
+  <p class="subtitle">上传课表截图 → OCR 自动识别 → 手动确认 → 导出日历文件</p>
+
+  <div class="steps">
+    <div class="step active" id="step1">上传图片</div>
+    <div class="step" id="step2">OCR 识别</div>
+    <div class="step" id="step3">确认课程</div>
+    <div class="step" id="step4">导出 ICS</div>
+  </div>
+
+  <!-- 步骤1：上传图片 -->
+  <div class="panel" id="panel1">
+    <h2>第一步：上传课表截图</h2>
+    <div class="tip">💡 提示：请确保图片清晰，包含完整的课表表格。建议从教务系统截图，识别准确率更高。</div>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-text">点击或拖拽上传课表图片</div>
+      <div class="upload-hint">支持 PNG、JPG 格式</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)">
+    <div class="image-preview" id="imagePreview"></div>
+
+    <div class="config-row" style="margin-top:16px;">
+      <div class="config-item">
+        <label>开学日期</label>
+        <input type="date" id="startDate" value="2026-09-07">
+      </div>
+      <div class="config-item">
+        <label>当前图片是第几周</label>
+        <input type="number" id="weekNum" value="5" min="1" max="30">
+      </div>
+      <div class="config-item">
+        <label>每天几节课</label>
+        <select id="periodsPerDay">
+          <option value="12">12 节（深大标准）</option>
+          <option value="14">14 节（含晚上）</option>
+          <option value="10">10 节</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="text-align:center; margin-top:16px;">
+      <button class="btn btn-primary" id="ocrBtn" disabled onclick="startOCR()">🔍 开始 OCR 识别</button>
+    </div>
+  </div>
+
+  <!-- 步骤2：OCR 识别 -->
+  <div class="panel" id="panel2" style="display:none;">
+    <h2>第二步：OCR 文字识别</h2>
+    <div class="progress-bar" id="progressBar" style="display:block;">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">准备中...</div>
+    <div class="raw-ocr" id="rawOcr" style="display:none;"></div>
+    <div style="text-align:center; margin-top:16px;">
+      <button class="btn btn-primary" id="parseBtn" disabled onclick="parseCourses()">📋 解析课程信息</button>
+    </div>
+  </div>
+
+  <!-- 步骤3：确认课程 -->
+  <div class="panel" id="panel3" style="display:none;">
+    <h2>第三步：确认并编辑课程</h2>
+    <div class="tip">⚠️ OCR 可能会有识别错误，请仔细核对每门课的信息，修改后再导出。</div>
+    <div class="course-list" id="courseList"></div>
+    <button class="add-course-btn" onclick="addCourseItem()">+ 手动添加课程</button>
+    <div class="action-row">
+      <button class="btn btn-secondary" onclick="goBack(2)">← 返回修改</button>
+      <button class="btn btn-success" onclick="generateICS()">📥 生成 .ics 文件</button>
+    </div>
+  </div>
+
+  <!-- 步骤4：导出 -->
+  <div class="panel" id="panel4" style="display:none;">
+    <h2>🎉 生成完成！</h2>
+    <p style="text-align:center; color:#666; margin:20px 0;">
+      共识别到 <strong id="courseCount" style="color:#667eea; font-size:20px;">0</strong> 门课程
+    </p>
+    <div style="text-align:center;">
+      <button class="btn btn-primary" onclick="downloadICS()">⬇️ 下载 .ics 文件</button>
+      <button class="btn btn-secondary" onclick="resetTool()" style="margin-left:10px;">🔄 重新开始</button>
+    </div>
+    <div style="margin-top:20px;">
+      <details>
+        <summary style="cursor:pointer; color:#667eea; font-size:13px;">查看生成的 ICS 内容</summary>
+        <pre id="icsPreview" style="background:#f8f8f8; padding:12px; border-radius:6px; font-size:11px; margin-top:8px; white-space:pre-wrap; overflow-x:auto;"></pre>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentImage = null;
+let ocrText = '';
+let courses = [];
+let icsContent = '';
+
+const PERIOD_TIMES = {
+  1: '08:30', 2: '09:25',
+  3: '10:30', 4: '11:25',
+  5: '14:00', 6: '14:55',
+  7: '16:00', 8: '16:55',
+  9: '19:00', 10: '19:55',
+  11: '20:45', 12: '21:40',
+  13: '22:00', 14: '22:55'
+};
+const PERIOD_DURATION = 45;
+const WEEK_DAYS = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+// 拖拽上传
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => {
+  uploadArea.classList.remove('dragover');
+});
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    loadImage(file);
+  }
+});
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (file) loadImage(file);
+}
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    currentImage = ev.target.result;
+    document.getElementById('imagePreview').innerHTML = `<img src="${currentImage}" alt="预览">`;
+    document.getElementById('ocrBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const step = document.getElementById('step' + i);
+    step.classList.remove('active', 'done');
+    if (i < n) step.classList.add('done');
+    else if (i === n) step.classList.add('active');
+    document.getElementById('panel' + i).style.display = (i === n) ? 'block' : 'none';
+  }
+}
+
+function goBack(n) {
+  setStep(n);
+}
+
+// OCR 识别
+async function startOCR() {
+  setStep(2);
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+
+  try {
+    const result = await Tesseract.recognize(
+      currentImage,
+      'chi_sim+eng',
+      {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            const pct = Math.round(m.progress * 100);
+            progressFill.style.width = pct + '%';
+            progressText.textContent = `识别中... ${pct}%`;
+          } else {
+            progressText.textContent = m.status;
+          }
+        }
+      }
+    );
+
+    ocrText = result.data.text;
+    document.getElementById('rawOcr').textContent = ocrText;
+    document.getElementById('rawOcr').style.display = 'block';
+    progressFill.style.width = '100%';
+    progressText.textContent = '✓ 识别完成！';
+    document.getElementById('parseBtn').disabled = false;
+
+  } catch (err) {
+    progressText.textContent = '❌ 识别失败：' + err.message;
+    progressFill.style.background = '#ff4d4f';
+  }
+}
+
+// 解析课程
+function parseCourses() {
+  const weekNum = parseInt(document.getElementById('weekNum').value);
+  const startDate = document.getElementById('startDate').value;
+
+  courses = [];
+  const lines = ocrText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  // 策略：尝试从文本中匹配常见课表模式
+  // 深大课表常见格式：课程名 教师 地点 周次/节次
+  // 或者表格形式：每列是星期，每行是节次
+
+  // 简单模式：匹配包含"节"、"周"、地点关键词的行
+  const locationKeywords = ['汇文楼', '致理楼', '文科楼', '南区', '体育馆', '图书馆', '科技楼', '教学楼', '实验楼', 'A楼', 'B楼', 'C楼', 'D楼', 'L1', 'L2', 'H3', 'H4'];
+  const coursePatterns = [
+    // 课程名 第X-Y节
+    /(.+?)\s*第?(\d+)[-~](\d+)节/,
+    // 课程名 周X 第X-Y节
+    /(.+?)\s*周[一二三四五六日]\s*第?(\d+)[-~](\d+)节/,
+  ];
+
+  // 按行解析，尝试提取课程信息
+  let foundCourses = [];
+  for (const line of lines) {
+    // 跳过太短的行
+    if (line.length < 3) continue;
+
+    // 找地点
+    let location = '';
+    for (const kw of locationKeywords) {
+      const idx = line.indexOf(kw);
+      if (idx >= 0) {
+        // 尝试提取完整地点名（如 汇文楼H3-303）
+        const match = line.substring(idx).match(/^[\u4e00-\u9fa5A-Za-z0-9\-]+/);
+        if (match) location = match[0];
+        break;
+      }
+    }
+
+    // 找节次
+    const periodMatch = line.match(/第?(\d+)[-~至](\d+)节/);
+    if (!periodMatch) continue;
+
+    const startPeriod = parseInt(periodMatch[1]);
+    const endPeriod = parseInt(periodMatch[2]);
+    if (startPeriod < 1 || endPeriod > 14 || startPeriod > endPeriod) continue;
+
+    // 找周次
+    let weekRange = `${weekNum}-${weekNum}`;
+    const weekMatch = line.match(/(\d+)[-~](\d+)周/);
+    if (weekMatch) {
+      weekRange = `${weekMatch[1]}-${weekMatch[2]}`;
+    }
+
+    // 找星期
+    let dayOfWeek = 0;
+    const dayMatch = line.match(/星期?([一二三四五六日1234567])/);
+    if (dayMatch) {
+      const map = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7};
+      dayOfWeek = map[dayMatch[1]] || 0;
+    }
+
+    // 提取课程名（节次之前的内容）
+    let courseName = line.substring(0, periodMatch.index).trim();
+    // 清理课程名中的无关信息
+    courseName = courseName.replace(/星期?[一二三四五六日1234567]\s*/, '').trim();
+    courseName = courseName.replace(/^[\d\.\-、\s]+/, '').trim();
+    if (courseName.length > 30) courseName = courseName.substring(0, 30);
+
+    if (courseName && startPeriod && dayOfWeek > 0) {
+      foundCourses.push({
+        name: courseName,
+        teacher: '',
+        location: location,
+        dayOfWeek: dayOfWeek,
+        startPeriod: startPeriod,
+        endPeriod: endPeriod,
+        weeks: weekRange
+      });
+    }
+  }
+
+  // 去重
+  const unique = [];
+  const seen = new Set();
+  for (const c of foundCourses) {
+    const key = `${c.name}_${c.dayOfWeek}_${c.startPeriod}_${c.endPeriod}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(c);
+    }
+  }
+  courses = unique;
+
+  // 如果没找到，给个空模板让用户手动填
+  if (courses.length === 0) {
+    courses = [
+      { name: '', teacher: '', location: '', dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: '1-18' }
+    ];
+  }
+
+  renderCourseList();
+  setStep(3);
+}
+
+function renderCourseList() {
+  const list = document.getElementById('courseList');
+  list.innerHTML = courses.map((c, i) => `
+    <div class="course-item">
+      <div class="ci-main">
+        <input type="text" class="ci-name" value="${escapeHtml(c.name)}" placeholder="课程名称" onchange="courses[${i}].name=this.value">
+        <div class="ci-row">
+          <input type="text" placeholder="教师" value="${escapeHtml(c.teacher || '')}" onchange="courses[${i}].teacher=this.value">
+          <input type="text" placeholder="地点" value="${escapeHtml(c.location || '')}" onchange="courses[${i}].location=this.value">
+        </div>
+        <div class="ci-row">
+          <select onchange="courses[${i}].dayOfWeek=parseInt(this.value)">
+            ${WEEK_DAYS.slice(1).map((d, idx) =>
+              `<option value="${idx+1}" ${c.dayOfWeek === idx+1 ? 'selected' : ''}>${d}</option>`
+            ).join('')}
+          </select>
+          <input type="number" placeholder="起始节" min="1" max="14" value="${c.startPeriod}" onchange="courses[${i}].startPeriod=parseInt(this.value)">
+          <span style="align-self:center; color:#999;">~</span>
+          <input type="number" placeholder="结束节" min="1" max="14" value="${c.endPeriod}" onchange="courses[${i}].endPeriod=parseInt(this.value)">
+          <input type="text" placeholder="周次 如:5-18" value="${c.weeks}" onchange="courses[${i}].weeks=this.value" style="flex:2;">
+        </div>
+      </div>
+      <button class="ci-delete" onclick="deleteCourse(${i})">删除</button>
+    </div>
+  `).join('');
+}
+
+function addCourseItem() {
+  courses.push({ name: '', teacher: '', location: '', dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: '1-18' });
+  renderCourseList();
+}
+
+function deleteCourse(index) {
+  courses.splice(index, 1);
+  renderCourseList();
+}
+
+// 生成 ICS
+function generateICS() {
+  const startDateStr = document.getElementById('startDate').value;
+  const startDate = new Date(startDateStr);
+
+  let ics = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//SZU Schedule//CN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:课程表
+X-WR-TIMEZONE:Asia/Shanghai
+BEGIN:VTIMEZONE
+TZID:Asia/Shanghai
+BEGIN:STANDARD
+DTSTART:19700101T000000
+TZOFFSETFROM:+0800
+TZOFFSETTO:+0800
+END:STANDARD
+END:VTIMEZONE
+`;
+
+  for (const c of courses) {
+    if (!c.name) continue;
+
+    const weeks = parseWeekRange(c.weeks);
+    if (weeks.length === 0) continue;
+
+    const startTime = PERIOD_TIMES[c.startPeriod] || '08:00';
+    const endHour = parseInt(PERIOD_TIMES[c.endPeriod].split(':')[0]);
+    const endMin = parseInt(PERIOD_TIMES[c.endPeriod].split(':')[1]) + PERIOD_DURATION;
+    const endTime = `${padZero(endHour + Math.floor(endMin/60))}:${padZero(endMin%60)}`;
+
+    // 第一周的该星期对应的日期
+    const firstDate = new Date(startDate);
+    firstDate.setDate(startDate.getDate() + (c.dayOfWeek - 1));
+
+    // 找到第一个实际上课的周
+    let actualStartDate = null;
+    for (const w of weeks) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + (w - 1) * 7 + (c.dayOfWeek - 1));
+      if (!actualStartDate || d < actualStartDate) actualStartDate = d;
+    }
+
+    if (!actualStartDate) continue;
+
+    const dtStart = formatICSTime(actualStartDate, startTime);
+    const dtEnd = formatICSTime(actualStartDate, endTime);
+
+    // 生成 DESCRIPTION
+    const description = `教师:${c.teacher || '未知'}\\n周次:${c.weeks}周\\n节次:第${c.startPeriod}-${c.endPeriod}节\\n地点:${c.location || '未知'}`;
+
+    ics += `BEGIN:VEVENT
+UID:crs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@szu
+DTSTAMP:${formatICSTime(new Date(), '00:00')}
+DTSTART;TZID=Asia/Shanghai:${dtStart}
+DTEND;TZID=Asia/Shanghai:${dtEnd}
+SUMMARY:${c.name}
+LOCATION:${c.location || ''}
+DESCRIPTION:${description}
+BEGIN:VALARM
+TRIGGER:-PT30M
+ACTION:DISPLAY
+DESCRIPTION:课程提醒
+END:VALARM
+END:VEVENT
+`;
+  }
+
+  ics += 'END:VCALENDAR';
+  icsContent = ics;
+
+  document.getElementById('courseCount').textContent = courses.filter(c => c.name).length;
+  document.getElementById('icsPreview').textContent = ics;
+  setStep(4);
+}
+
+function parseWeekRange(str) {
+  const weeks = [];
+  if (!str) return weeks;
+  const parts = str.split(',');
+  for (const p of parts) {
+    const t = p.trim();
+    if (t.includes('-')) {
+      const [s, e] = t.split('-').map(x => parseInt(x.replace(/[^\d]/g, '')));
+      for (let i = s; i <= e; i++) {
+        if (i >= 1 && i <= 30) weeks.push(i);
+      }
+    } else {
+      const n = parseInt(t.replace(/[^\d]/g, ''));
+      if (n >= 1 && n <= 30) weeks.push(n);
+    }
+  }
+  return [...new Set(weeks)].sort((a,b) => a-b);
+}
+
+function formatICSTime(date, timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const y = date.getFullYear();
+  const mo = padZero(date.getMonth() + 1);
+  const d = padZero(date.getDate());
+  return `${y}${mo}${d}T${padZero(h)}${padZero(m)}00`;
+}
+
+function padZero(n) { return n < 10 ? '0' + n : '' + n; }
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function downloadICS() {
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '课表导出.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetTool() {
+  currentImage = null;
+  ocrText = '';
+  courses = [];
+  icsContent = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('imagePreview').innerHTML = '';
+  document.getElementById('ocrBtn').disabled = true;
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('rawOcr').style.display = 'none';
+  document.getElementById('parseBtn').disabled = true;
+  setStep(1);
+}
+</script>
+</body>
+</html>

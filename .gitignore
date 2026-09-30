@@ -1,0 +1,46 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+
+# 个人数据（包含隐私信息）
+*.json
+!package.json
+cookies*.txt
+个人课表数据/
+
+# 导出文件
+导出的课表/
+*.ics
+!示例课表.ics
+
+# 截图（非必要示例图）
+screenshots/
+*.png
+!markdownimgs/*.png
+
+# Node modules（如果将来引入）
+node_modules/

@@ -1,0 +1,7 @@
+# 禁用 Jekyll 处理，让 GitHub Pages 直接托管静态文件
+include:
+  - "*.html"
+  - "*.js"
+  - "*.user.js"
+exclude:
+  - ReadMe.md
